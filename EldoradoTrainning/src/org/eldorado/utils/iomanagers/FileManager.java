@@ -4,13 +4,13 @@ import org.eldorado.model.*;
 import org.eldorado.utils.converters.DateConverter;
 import org.eldorado.utils.converters.LocaleConverter;
 
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class FileManager {
 
@@ -20,37 +20,33 @@ public class FileManager {
 
 
 
-    public void writeFile(){
+    public void writeFile(String filename, List<BasicReport> list ){
 
+        try {
+            BufferedWriter writer = new BufferedWriter((new FileWriter(filename)));
+            list.forEach(item ->{
+                try {
+                    writer.append(item.printCsv(';')).append((System.lineSeparator()));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public List<CompanyBills> readCompanyBillsFile(String fileName){
         List<CompanyBills> companiesBilling = new ArrayList<>();
-        LocaleConverter converter = new LocaleConverter("pt","BR");
+
+        InputStream inputFS = null;
+
         try{
-            BufferedReader bufferedReader = new BufferedReader(new FileReader(String.format("%s/%s",PATH, fileName)));
-            bufferedReader.readLine();
-            String line = bufferedReader.readLine();
-            while(line !=null){
-                String[] vector = line.split(";");
-                var companyBills = new CompanyBills();
-                companyBills.setName(vector[0]);
-                var billing = new Billing();
-                billing.setMonth(Integer.parseInt(vector[1]));
-                billing.setYear(Integer.parseInt(vector[2]));
-                var parcel = new Parcel(converter.convertDoubleValues(vector[4]),
-                        DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY,vector[3]));
-                billing.addParcel(parcel);
-                parcel = new Parcel(converter.convertDoubleValues(vector[6]),
-                        DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY,vector[5]));
-                billing.addParcel(parcel);
-                parcel = new Parcel(converter.convertDoubleValues(vector[8]),
-                        DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY,vector[7]));
-                billing.addParcel(parcel);
-                companyBills.addBilling(billing);
-                companiesBilling.add(companyBills);
-                line = bufferedReader.readLine();
-            }
+            inputFS = new FileInputStream(new File(String.format("%s/%s",PATH,fileName)));
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputFS));
+            companiesBilling = bufferedReader.lines().skip(1).map(mapToBill).collect(Collectors.toList());
+            bufferedReader.close();
 
         }catch (FileNotFoundException e) {
             throw new RuntimeException(e);
@@ -62,35 +58,61 @@ public class FileManager {
 
     public List<CompanyNote> readCompanyNoteFile(String fileName){
         List<CompanyNote> companiesNote = new ArrayList<>();
-        LocaleConverter converter = new LocaleConverter("pt","BR");
+        InputStream inputFS = null;
         try{
-            BufferedReader bufferedReader = new BufferedReader(new FileReader(String.format("%s/%s",PATH, fileName)));
-            bufferedReader.readLine();
-            String line = bufferedReader.readLine();
-            while(line !=null){
-                String[] vector = line.split(";",6);
-                var companyNote = new CompanyNote();
-                companyNote.setCompany(vector[0]);
-                var note = new MonthNote();
-                note.setMonth(Integer.parseInt(vector[1]));
-                note.setYear(Integer.parseInt(vector[2]));
-                note.setValue(converter.convertDoubleValues(vector[3]));
-                if(vector[4]!="") {
-                    note.setEmissionDate(DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY, vector[4]));
-                }
-                companyNote.addMonthNote(note);
-                companiesNote.add(companyNote);
-
-                line = bufferedReader.readLine();
-            }
+            inputFS = new FileInputStream(new File(String.format("%s/%s",PATH,fileName)));
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputFS));
+            companiesNote = bufferedReader.lines().skip(1).map(mapToNote).collect(Collectors.toList());
+            bufferedReader.close();
 
         }catch (FileNotFoundException e) {
-
+            throw new RuntimeException(e);
         } catch (IOException e) {
-
+            throw new RuntimeException(e);
         }
         return companiesNote;
     }
 
+    private Function<String, CompanyBills> mapToBill = (line)->
+    {
+        LocaleConverter converter = new LocaleConverter("pt","BR");
+        String[] p = line.split(";");
+        CompanyBills item = new CompanyBills();
+
+        item.setName(p[0]);
+        item.setMonth(Integer.parseInt(p[1]));
+        item.setYear(Integer.parseInt(p[2]));
+        item.setDate1(DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY,p[3]));
+        item.setParcel1(BigDecimal.valueOf(converter.convertDoubleValues(p[4])));
+        item.setDate2(DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY,p[5]));
+        item.setParcel2(BigDecimal.valueOf(converter.convertDoubleValues(p[6])));
+        item.setDate3(DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY,p[7]));
+        item.setParcel3(BigDecimal.valueOf(converter.convertDoubleValues(p[8])));
+
+        return item;
+
+    };
+
+    private Function<String, CompanyNote> mapToNote = (line)->
+    {
+        LocaleConverter converter = new LocaleConverter("pt","BR");
+        String[] p = line.split(";",6);
+        CompanyNote item = new CompanyNote();
+
+        item.setCompany(p[0]);
+        item.setMonth(Integer.parseInt(p[1]));
+        item.setYear(Integer.parseInt(p[2]));
+        item.setValue(BigDecimal.valueOf(converter.convertDoubleValues(p[3])));
+        if(p[4]!=null && p[4]!=""){
+            item.setEmissionDate(DateConverter.convertDate(DateConverter.FORMAT_DD_MM_YYYY,p[4]));
+        }
+        if(p[5]=="") {
+            p[5]="0";
+        }
+        item.setNote(Integer.parseInt(p[5]));
+
+        return item;
+
+    };
 
 }
